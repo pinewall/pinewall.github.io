@@ -24,13 +24,21 @@ body {
 header {
   background-color: #159957;
   background-image: linear-gradient(120deg, #155799, #159957);
-  padding: 20px 0;
+  padding: 30px 50px;
   margin-bottom: 30px;
   color: white;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.wrapper {
+  max-width: 960px;
+  margin: 20px auto;
+  padding: 0 0;
 }
 
 header h1 {
-  margin: 0;
+  margin: 0 0 10px 0;
   font-size: 2em;
 }
 
@@ -41,7 +49,8 @@ header h1 a {
 
 header p {
   opacity: 0.8;
-  margin: 10px 0 20px 0;
+  margin: 0 0 20px 0;
+  max-width: 80%;
 }
 
 header nav ul {
@@ -151,6 +160,10 @@ table th {
 }
 
 @media screen and (max-width: 600px) {
+  header {
+    padding: 20px 25px;
+  }
+
   header nav ul {
     flex-direction: column;
     gap: 10px;
