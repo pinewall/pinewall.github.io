@@ -1,3 +1,7 @@
-theme: jekyll-theme-minimal
-title: Pinewall's homepage
-description: Bookmark this to keep an eye on my project updates!
+title: 技术文档
+description: OpenClaw, Nanobot 和 LLM 技术介绍
+lang: zh-CN
+
+# Build settings
+markdown: kramdown
+
