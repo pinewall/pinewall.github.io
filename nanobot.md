@@ -1,254 +1,343 @@
 ---
 layout: default
-title: Nanobot 开源小型AI机器人基本原理
+title: Nanobot 开源 AI 智能体基本原理
 ---
 
-# Nanobot 开源小型AI机器人基本原理
+# Nanobot 开源 AI 智能体基本原理
 
-Nanobot 是一个**开源小型自主机器人（AI Agent）项目**，设计目标是提供一个结构简单、易于制作的小型智能机器人平台，类似于 OpenClaw 但整体更加简洁，适合爱好者学习和二次开发。
+Nanobot 是一个轻量级**开源 AI 智能体（AI Agent）**项目，它可以连接到飞书、Telegram 等即时通讯渠道，提供带工具调用和长期记忆能力的 AI 助手服务。整个项目仅约 **4000 行 Python 代码**，设计简洁清晰，易于理解和二次开发。
+
+项目地址：[https://github.com/HKUDS/nanobot](https://github.com/HKUDS/nanobot)
 
 ## 什么是 Nanobot
 
-Nanobot 定位：
-- **小型化**：整体尺寸小巧，适合桌面和小型空间
-- **极简结构**：机械设计简单，零件少，易于组装
-- **全开源**：机械设计、电路、软件全部公开
-- **AI 能力**：集成基本的感知、规划、决策能力
-- **教育友好**：适合作为机器人学习入门平台
+Nanobot 是一个**自托管 AI 网关代理**，它的核心定位：
 
-典型规格：
-- 尺寸：通常 10-20 cm 见方
-- 驱动：差分驱动两轮/四轮
-- 感知：超声波/红外测距 + 摄像头
-- 控制：单板计算机（Raspberry Pi 等）
-- 电源：锂电池供电
+- 🤖 **带工具使用的 AI 助手**：支持读写文件、执行命令、搜索、网页抓取等工具
+- 🧠 **两层记忆架构**：支持长期记忆的自动压缩，解决上下文窗口限制
+- 🔌 **多渠道支持**：可连接飞书、Telegram 等 IM 平台，随时随地对话
+- 🔄 **ReAct 执行循环**：标准的思考-行动-观察循环，支持多轮工具调用
+- 🔑 **多提供商支持**：支持 30+ LLM 提供商（Anthropic、OpenAI、OpenRouter、Ollama 等）
+- 🧩 **极简架构**：整个项目约 4000 行代码，易于阅读和修改
 
-## 机械结构原理
+## 整体架构
 
-### 差分驱动底盘
-
-Nanobot 通常采用**差分两轮驱动**设计：
+Nanobot 采用**分层模块化设计**，架构清晰：
 
 ```
-    [前轮 / 万向轮]
-          O
-          |
-    [左轮] O  [右轮]
-     (电机)  O  (电机)
-
-轮距决定转向半径，轴距决定稳定性
+入口层 (CLI)
+  ↓
+配置层 (Pydantic  schema)
+  ↓
+消息总线 (async queue)
+  ↓
+核心引擎 (AgentLoop + ReAct)
+  ↓
+渠道层 (飞书/Telegram/...)
+  ↓
+用户端
 ```
 
-原理：
-- 两个独立电机分别驱动左右轮
-- 两轮同速同向 → 直线前进后退
-- 两轮同速反向 → 原地旋转
-- 两轮不同速 → 弧线转向
-
-优点：
-- 结构简单，只需要两个电机
-- 原地零半径转弯，机动性好
-- 控制简单，不需要转向舵机
-
-### 常用车身结构
-
-**分层设计**：
-```
-底层：电池 + 驱动轮 + 电机
-中层：电机驱动板 + 电源管理
-顶层：主控板 + 传感器
-```
-
-材料选择：
-- **3D打印**：最常用，易于修改，爱好者友好
-- **激光切割**：亚克力或木板，精度高
-- **铝合金**：强度高，重量轻，适合进阶
-
-## 电路与驱动系统
-
-### 硬件组成
-
-典型硬件配置：
-
-| 组件 | 作用 | 常见选择 |
-|------|------|---------|
-| 主控 | 主控制和AI计算 | Raspberry Pi Zero / 3 / 4 |
-| 电机驱动 | 驱动直流电机 | TB6612 / L298N / A4950 |
-| 电机 | 提供动力 | N20 减速电机 / 6V/12V 直流电机 |
-| 电源 | 供电 | 18650锂电池 × 2 (7.4V) |
-| 测距 | 障碍物检测 | HC-SR04 超声波 × 2-3个 |
-| 传感器 可选 | 碰撞检测 | 微动开关 |
-| 传感器 可选 | 姿态 | MPU6050 六轴IMU |
-| 传感器 可选 | 视觉 | CSI 摄像头 |
-| 通信 | 无线控制 | WiFi / Bluetooth |
-
-### 动力系统原理
-
-**减速电机**：
-- 电机高转速低扭矩 → 减速器输出低转速高扭矩
-- 常用减速比：1:50 ~ 1:200
-- Nanobot 小巧，不需要太大轮径，减速比不需要太大
-
-**电源管理**：
-- 锂电池直接给电机供电
-- 通过降压模块（LM1117 5V 或 MP1584）给主控和传感器供电
-- 建议预留充电管理电路
-
-## 控制与AI原理
-
-### 基础运动控制
-
-**运动学模型**：
-对于差分驱动，线速度 `v` 和角速度 `ω` 与两轮转速关系：
+完整的模块结构：
 
 ```
-v = (v_left + v_right) / 2
-ω = (v_right - v_left) / wheel_base
-
-v_left = v - ω × wheel_base / 2
-v_right = v + ω × wheel_base / 2
+nanobot/
+├── cli/commands.py        # CLI 入口，三个核心命令
+├── config/
+│   ├── schema.py          # Pydantic 配置定义
+│   └── loader.py          # 配置加载
+├── providers/
+│   ├── registry.py       # Provider 注册表
+│   └── ...               # 各提供商适配
+├── agent/
+│   ├── loop.py           # 主循环 (584 行)
+│   ├── runner.py         # ReAct 执行器 (232 行)
+│   ├── context.py        # Prompt 构建 (200 行)
+│   ├── memory.py         # 记忆系统 (核心)
+│   ├── skills.py         # 技能系统
+│   └── tools/            # 工具实现
+│       ├── registry.py
+│       ├── filesystem.py
+│       ├── shell.py
+│       ├── web.py
+│       └── ...
+├── session/
+│   └── manager.py        # 会话管理
+├── bus/
+│   ├── queue.py          # 消息总线 (44 行)
+│   └── events.py         # 事件数据结构
+├── channels/
+│   ├── base.py           # 渠道基类
+│   ├── manager.py        # 渠道管理 (264 行)
+│   ├── feishu.py         # 飞书适配
+│   └── telegram.py       # Telegram 适配
+├── cron/                 # 定时任务
+└── heartbeat/            # 心跳服务
 ```
 
-- `wheel_base` 是两轮之间的距离
-- 给定目标 v 和 ω 就能算出需要的两轮速度
+## 核心入口命令
 
-###  obstacle avoidance 避障原理
+在 `pyproject.toml` 中注册了三个入口命令：
 
-最基本的 AI 行为：
+| 命令 | 用途 |
+|------|------|
+| `nanobot gateway` | 启动网关模式（连接飞书/Telegram） |
+| `nanobot agent` | 本地交互调试，不走外部渠道 |
+| `nanobot onboard` | 初始化工作区和配置 |
 
-```
-while True:
-    读取各个方向距离
-    if 前方距离 < 安全距离:
-        停止前进
-        if 左边距离 > 右边距离:
-            右转
-        else:
-            左转
-    else:
-        前进
-```
+启动 `gateway` 时，会创建所有核心组件：
 
-更进阶的方法：
-- **势场法**：目标吸引，障碍物排斥
-- **A* 路径规划**：已知地图全局规划
-- **动态窗口法 DWA**：考虑运动约束的局部规划
-
-### 线跟随原理
-
-使用红外传感器阵列：
-
-```
-[IR左] [IR中] [IR右]
-
-黑线反射率低 → 输出低
-白线反射率高 → 输出高
-
-控制逻辑：
-- 中间检测到黑线 → 直行
-- 左边检测到黑线 → 左转修正
-- 右边检测到黑线 → 右转修正
+```python
+gateway()
+  ├── MessageBus         (消息总线，异步队列)
+  ├── LLMProvider        (LLM 提供商适配器)
+  ├── SessionManager     (会话管理器)
+  ├── CronService        (定时任务服务)
+  ├── AgentLoop          (核心引擎主循环)
+  ├── ChannelManager     (渠道管理器)
+  └── HeartbeatService   (心跳服务)
 ```
 
-### 自主导航
+## 核心引擎：ReAct 循环
 
-如果带有 IMU 和轮编码器，可以实现：
-- **里程计**：通过编码器计数估算位移
-- **IMU 融合**：互补滤波或卡尔曼滤波融合得到姿态
-- **SLAM**：使用 GMapping 或 Cartographer 建图
-
-## 软件架构
-
-### 层级结构
+这是整个系统的心脏，处理流程如下：
 
 ```
-硬件层 → 驱动层 → 决策层 → 行为层
-
-  硬件层: 电机、传感器
-  驱动层: GPIO读写、PWM输出、数据读取
-  决策层: 避障算法、路径规划
-  行为层: 任务级行为（巡线、探索、抓取）
+用户消息 → AgentLoop.run()
+    │
+    ├── 斜杠命令？ → CommandRouter 处理
+    │
+    ▼
+_process_message()
+    │
+    ├── SessionManager.get_or_create()   # 获取或新建会话
+    ├── MemoryConsolidator.maybe_consolidate()  # 检查是否需要压缩记忆
+    ├── ContextBuilder.build_messages()  # 构建完整 prompt
+    │   ├── 系统提示 = 身份 + 引导文件 + 记忆 + 技能
+    │   ├── 历史消息 = 只包含未压缩的最近对话
+    │   └── 当前用户消息 + 运行时上下文
+    │
+    ▼
+_run_agent_loop()  → AgentRunner.run()
+    │
+    ├── FOR 最多 40 次迭代:
+    │   │
+    │   ├─ provider.chat_with_retry()    # 调用 LLM
+    │   │
+    │   ├─ 如果有工具调用:
+    │   │   ├─ ToolRegistry.execute()    # 执行工具
+    │   │   ├─ 添加工具结果到消息列表
+    │   │   └─ 继续循环
+    │   │
+    │   └─ 如果没有工具调用:
+    │       └─ 返回最终回复
+    │
+    ├── 保存本轮消息到 Session
+    └── 构造 OutboundMessage → 发回消息总线 → 渠道发送给用户
 ```
 
-### 基于 ROS 的方案
+**核心特点**：
+- 支持**并发工具执行**：多个工具调用可以并行运行
+- 最大迭代次数默认为 40，防止无限循环
+- 完全符合标准 ReAct 模式：Thinking → Acting → Observing → Repeat
 
-很多开源机器人项目基于 ROS：
-- `ros_control` 提供控制框架
-- `navigation_stack` 提供导航功能
-- `rviz` 可视化调试
-- 缺点：对 Pi Zero 这样的低配有点重
+## 工具系统
 
-### 轻量级方案
+Nanobot 内置了多种工具，LLM 可以按需使用：
 
-Nanobot 因为结构简单，通常使用更轻量的方案：
-- 直接 Python 编写控制逻辑
-- 使用 `RPi.GPIO` 直接操作硬件
-- 循环读取传感器 → 计算 → 输出电机速度
-- 适合初学者理解整个控制流程
+| 工具 | 用途 |
+|------|------|
+| `read_file` | 读取本地文件 |
+| `write_file` | 写入本地文件 |
+| `edit_file` | 编辑现有文件 |
+| `list_dir` | 列出目录内容 |
+| `exec` | 执行 Shell 命令 |
+| `web_search` | 网络搜索 |
+| `web_fetch` | 抓取网页内容 |
+| `message` | 发送消息到渠道 |
+| `spawn` | 启动子代理 |
+| `cron` | 定时任务管理 |
 
-## 典型AI行为示例
+每个工具都继承 `Tool` 基类，实现 `execute()` 方法，并以 OpenAI function calling 格式暴露给 LLM。
 
-### 探索行为
+## 记忆系统（核心设计）
 
-```
-1. 直线前进
-2. 遇到障碍物
-   a. 记录障碍物位置
-   b. 转向空闲方向
-   c. 继续前进
-3. 探索完整个空间后停止
-```
+Nanobot 采用**两层记忆架构**，灵感来源于人脑：
 
-### 目标搜寻
+| 层级 | 存储文件 | 用途 | 特点 |
+|------|----------|------|------|
+| **长期记忆** | `memory/MEMORY.md` | 存储关键事实、偏好、项目上下文 | LLM 可读，持续更新 |
+| **历史日志** | `memory/HISTORY.md` | 对话摘要时间线 | grep 可搜索，append-only |
 
-如果带摄像头：
-1. 使用训练好的模型识别目标
-2. 根据目标在图像中的位置调整朝向
-3. 逐步靠近目标
-4. 到达后停止
+### 记忆压缩流程
 
-### 墙壁跟随
+当会话 token 数超过阈值时，自动触发压缩：
 
 ```
-保持与右侧墙壁固定距离
-→ 一直沿着墙壁走
-→ 可以遍历整个房间
-→ 最终找到出口
+1. 估算当前 prompt token 数
+2. 如果超过阈值 (context_window - max_tokens - buffer):
+   a. 在 user turn 边界选择切割点（保持对话合法性）
+   b. 调用 LLM 压缩旧对话 → 生成新的长期记忆和历史条目
+   c. 写入 MEMORY.md 和 HISTORY.md
+   d. 更新 session.last_consolidated 指针
+3. 下次构建上下文时：
+   - MEMORY.md 注入到 system prompt
+   - 只把未压缩的消息作为历史
+   - 总 token 数回到限制以内
 ```
 
-## 制作流程
+### 压缩决策逻辑
 
-1. **获取设计文件**：从 GitHub 下载 STL 或 CAD 文件
-2. **加工零件**：3D打印车身零件，购买标准件
-3. **组装**：安装电机、车轮、轴承到车身
-4. **接线**：按照电路图连接电机、驱动板、主控、传感器
-5. **烧录软件**：刷系统，部署控制程序
-6. **调试**：校准传感器，调整PID参数（如果用PID）
-7. **运行**：测试避障、巡线等基本功能
+```python
+budget = context_window_tokens - max_completion_tokens - safety_buffer
+# 默认: 65536 - 8192 - 1024 = 56320 tokens
 
-## 与 OpenClaw 的关系
+if estimated_tokens > budget:
+    触发压缩
+```
 
-| 特性 | OpenClaw | Nanobot |
-|------|----------|---------|
-| 定位 | 机械爪末端执行器 | 完整移动机器人平台 |
-| 功能 | 抓取物体 | 自主移动、感知、决策 |
-| 复杂度 | 中等（机械精度要求高） | 简单（零件少） |
-| 所需技能 | 机械组装 + 控制 | 组装 + Python编程 + AI |
+### 关键设计亮点
 
-OpenClaw 是抓取末端执行器，Nanobot 是完整的移动机器人本体，可以将 OpenClaw 安装到 Nanobot 上，组成一个完整的**可移动抓取机器人**。
+**1. 在 user turn 边界切割**
+```python
+# 只在 user 消息处切割
+for idx in ...:
+    if message.role == "user":
+        选择此处为边界
+```
+- 避免切割 `assistant → tool → tool_result` 完整链
+- 保证压缩后消息列表仍然合法
 
-## 应用场景
+**2. 渐进式压缩**
+- 每次只压缩超出预算的部分
+- 单次最多压缩 5 轮，避免耗时过长
 
-1. **教育学习**：机器人学入门，学习控制和AI
-2. **竞赛入门**：小型机器人竞赛参赛平台
-3. **自主漫游**：桌面/实验室自主探索
-4. **二次开发**：作为底盘，添加自己的功能
-5. **物联网**：移动监控、环境监测
+**3. 容错降级**
+- LLM 压缩失败连续 3 次 → 直接原始归档
+- 不阻塞主流程，保证可用性
+
+**4. Append-only 设计**
+- Session 消息从不删除，只移动 `last_consolidated` 指针
+- 对 LLM 缓存友好，不破坏已缓存的前缀
+- 数据完整，可随时重建
+
+**5. 后台异步压缩**
+- 消息处理完成后在后台触发再次检查压缩
+- 不阻塞用户交互，提升体验
+
+## 消息总线设计
+
+消息总线是渠道和核心引擎之间的**解耦层**，只用 44 行代码实现：
+
+```
+渠道A ──→ 入队队列 ──→ AgentLoop
+渠道B ──↗                │
+                         ▼
+渠道A ←── 出队队列 ←── AgentLoop
+渠道B ←──↗
+```
+
+只有两个 `asyncio.Queue`：
+- `inbound`: 渠道 → Agent
+- `outbound`: Agent → 渠道
+
+## 配置与提供商自动匹配
+
+配置使用 Pydantic 定义，结构清晰：
+
+```python
+Config
+├── agents: AgentsConfig          # 模型参数（temperature, max_tokens...）
+├── channels: ChannelsConfig      # 渠道配置
+├── providers: ProvidersConfig    # API 密钥（30+ 提供商）
+├── gateway: GatewayConfig        # 网关端口、心跳
+└── tools: ToolsConfig            # 工具配置（web, exec, MCP...）
+```
+
+提供商自动匹配逻辑：
+1. 如果配置显式指定 `provider` → 直接使用
+2. 否则，模型名前缀匹配（`anthropic/claude-3` → Anthropic）
+3. 否则，关键词匹配（包含 `claude` → Anthropic）
+4. fallback 到本地（Ollama）或网关（OpenRouter）
+
+**添加新 provider 只需两步**：
+1. 在 `registry.py` 添加一个 `ProviderSpec`
+2. 在 `schema.py` 的 `ProvidersConfig` 添加一个字段
+
+## 完整数据流转示例
+
+以 Telegram 渠道为例：
+
+```
+1. Telegram 推送消息 → TelegramChannel._on_message()
+2. 构造 InboundMessage → MessageBus.publish_inbound()
+3. AgentLoop.run() 异步消费消息
+4. _dispatch() 获取会话锁
+5. _process_message():
+   a. SessionManager 获取会话
+   b. MemoryConsolidator 检查压缩
+   c. ContextBuilder 构建完整 prompt（注入记忆）
+   d. _run_agent_loop() ReAct 循环
+   e. 如有工具调用 → 执行工具 → 结果回传给 LLM
+   f. LLM 返回最终回复
+6. 构造 OutboundMessage → MessageBus.publish_outbound()
+7. ChannelManager._dispatch_outbound() 消费
+8. TelegramChannel.send() 发送回复给用户
+9. 后台任务 → 再次检查记忆压缩
+```
+
+## 技能系统
+
+技能系统从 `skills/` 目录加载：
+
+- 每个技能一个目录，包含 `SKILL.md`
+- 支持 `always-on` （总是注入上下文）和按需加载
+- 技能内容作为系统提示的一部分交给 LLM
+- 类似于可插拔的能力模块
+
+## 代码规模
+
+整个项目非常精简，约 4000 行 Python：
+
+| 模块 | 行数 | 职责 |
+|------|------|------|
+| `agent/loop.py` | 584 | 核心 ReAct 循环 |
+| `agent/runner.py` | 232 | 纯粹的工具执行循环 |
+| `agent/context.py` | 200 | Prompt 构建 |
+| `channels/manager.py` | 264 | 渠道管理 |
+| `providers/registry.py` | 355 | Provider 注册 |
+| `config/schema.py` | 262 | 配置定义 |
+| `cli/commands.py` | 1233 | CLI 命令处理 |
+| `bus/queue.py` | 44 | 消息总线 |
+
+## 设计特点总结
+
+1. **简单胜于复杂**：没有过度工程，核心逻辑清晰易懂
+2. **模块化解耦**：消息总线解耦渠道和核心引擎
+3. **可靠的记忆管理**：两层架构 + 自动压缩解决上下文窗口问题
+4. **渐进式压缩**：保持响应性，避免单次压缩时间过长
+5. **完整的容错降级**：压缩失败不影响服务可用性
+6. **多提供商支持**： easily 切换不同 LLM 服务
+
+## 部署使用
+
+```bash
+# 安装
+pip install nanobot-ai
+
+# 初始化工作区
+nanobot onboard
+
+# 编辑配置 ~/.nanobot/config.yaml 添加 API 密钥
+
+# 启动网关
+nanobot gateway
+```
+
+配置完成后，你就拥有了一个自托管、带长期记忆和工具能力的个人 AI 助手，可以在飞书/Telegram 随时访问。
 
 ## 总结
 
-Nanobot 是一个结构简单、易于制作的**开源小型AI移动机器人平台**。它采用差分驱动设计，分层机械结构，集成基本传感器和AI算法，能够实现避障、巡线、自主导航等基本智能行为。
+Nanobot 是一个**设计优雅、代码精简的开源 AI Agent 项目**。它展示了如何用几千行代码构建一个完整的可用 AI 智能体，包含了 ReAct 循环、工具调用、自动记忆压缩等现代 AI Agent 核心技术。如果你想学习 AI Agent 原理，或者需要一个自托管的个人 AI 助手，Nanobot 是一个很好的起点。
 
-作为入门级项目，它降低了自制AI机器人的门槛，爱好者可以用低成本零件组装出属于自己的智能机器人，并在此基础上学习机器人控制、路径规划和AI决策算法。
-
-项目仓库：[https://github.com/HKUDS/nanobot](https://github.com/HKUDS/nanobot)
+项目源码：[https://github.com/HKUDS/nanobot](https://github.com/HKUDS/nanobot)
